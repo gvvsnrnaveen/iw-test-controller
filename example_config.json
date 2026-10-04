@@ -1,0 +1,47 @@
+{
+  "assoc_timeout": 60,
+  "auto_start": false,
+  "bandwidths": [
+    "HT20",
+    "HT40",
+    "HT80",
+    "HT10",
+    "HT5"
+  ],
+  "bidirectional": true,
+  "channels_2g": "auto",
+  "channels_5g": "auto",
+  "connect_timeout": 0,
+  "country": "US",
+  "dfs_wait": 70,
+  "dut_a": "",
+  "dut_b": "",
+  "encryption": "none",
+  "include_dfs": false,
+  "key": "",
+  "listen": "0.0.0.0",
+  "max_loss": 20.0,
+  "modes": [
+    "ap_sta",
+    "mesh"
+  ],
+  "output": "results/iw-test-controller_{timestamp}.csv",
+  "phy_mode": "ht",
+  "ping_count": 10,
+  "ping_size": 56,
+  "port": 5555,
+  "radios": [
+    "phy0",
+    "phy1",
+    "phy2"
+  ],
+  "reconnect_timeout": 120,
+  "restore_at_end": true,
+  "retries": 0,
+  "settle_time": 3,
+  "subnet": "192.168.250",
+  "swap_roles": false,
+  "token": "",
+  "verify_width": true,
+  "wait_duts": 2
+}
