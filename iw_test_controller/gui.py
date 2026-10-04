@@ -7,12 +7,13 @@ import sys
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from . import __version__
-from .config import (BANDWIDTHS, ENCRYPTIONS, MODE_LABELS, MODES, PHY_MODES, RADIOS,
+from .config import (BANDWIDTHS, ENCRYPTIONS, MODE_LABELS, MODES, PHY_LABELS, PHY_MODES, RADIOS,
                      load_config, output_path, save_config, validate)
 from .planner import build_plan
 from .runner import TestRunner
@@ -35,6 +36,73 @@ ABOUT_LINKS = [("LinkedIn", "https://www.linkedin.com/in/naveen-kumar-gutti/"),
 AVATAR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "github_avatar.png")
 DUT_COLS = [("name", "Name", 120), ("ip", "IP", 110), ("model", "Model", 160),
             ("radios", "Radios", 200), ("version", "Agent", 60), ("busy", "Busy", 70)]
+# checkbox indicator state -> (fill, border, tick colour or None)
+CHECKBOX_STATES = {
+    "off": ("#ffffff", "#8a8f98", None),
+    "off_hover": ("#eef4ff", "#2563eb", None),
+    "off_disabled": ("#eceae6", "#bdbab4", None),
+    "on": ("#2563eb", "#2563eb", "#ffffff"),
+    "on_hover": ("#1d4ed8", "#1d4ed8", "#ffffff"),
+    "on_disabled": ("#a9b9d8", "#a9b9d8", "#f4f4f4"),
+}
+
+
+def _hex_rgb(c):
+    return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def _seg_dist(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+    return ((px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** 0.5
+
+
+def _checkbox_image(master, size, bg, fill, border, tick):
+    """Draw an anti-aliased rounded checkbox (optionally ticked) into a PhotoImage, no PIL needed."""
+    ss = 4  # supersamples per axis
+    half = size / 2.0 - 0.5
+    radius = size * 0.22
+    bw = max(1.0, size / 12.0)
+    tw = max(1.5, size * 0.13) / 2.0
+    pts = [(0.24 * size, 0.52 * size), (0.42 * size, 0.70 * size), (0.77 * size, 0.31 * size)]
+    cols = {"bg": _hex_rgb(bg), "fill": _hex_rgb(fill), "border": _hex_rgb(border),
+            "tick": _hex_rgb(tick) if tick else None}
+    img = tk.PhotoImage(master=master, width=size, height=size)
+    rows = []
+    transparent = []
+    for y in range(size):
+        row = []
+        for x in range(size):
+            acc = [0, 0, 0]
+            outside = 0
+            for sy in range(ss):
+                for sx in range(ss):
+                    px, py = x + (sx + 0.5) / ss, y + (sy + 0.5) / ss
+                    qx = max(abs(px - size / 2.0) - (half - radius), 0.0)
+                    qy = max(abs(py - size / 2.0) - (half - radius), 0.0)
+                    d = (qx * qx + qy * qy) ** 0.5 - radius
+                    if d > 0:
+                        c = cols["bg"]
+                        outside += 1
+                    elif cols["tick"] and min(_seg_dist(px, py, *pts[0], *pts[1]),
+                                              _seg_dist(px, py, *pts[1], *pts[2])) <= tw:
+                        c = cols["tick"]
+                    elif d > -bw:
+                        c = cols["border"]
+                    else:
+                        c = cols["fill"]
+                    acc[0] += c[0]
+                    acc[1] += c[1]
+                    acc[2] += c[2]
+            n = ss * ss
+            if outside == n:
+                transparent.append((x, y))
+            row.append("#%02x%02x%02x" % (acc[0] // n, acc[1] // n, acc[2] // n))
+        rows.append("{" + " ".join(row) + "}")
+    img.put(" ".join(rows))
+    for x, y in transparent:
+        img.transparency_set(x, y, True)
+    return img
 
 
 class ControllerApp:
@@ -73,7 +141,7 @@ class ControllerApp:
             "listen": V(), "port": V(), "token": V(),
             "dut_a": V(), "dut_b": V(),
             "channels_2g": V(), "channels_5g": V(),
-            "dfs_wait": V(), "phy_mode": V(), "encryption": V(), "key": V(), "country": V(),
+            "dfs_wait": V(), "encryption": V(), "key": V(), "country": V(),
             "subnet": V(), "assoc_timeout": V(), "ping_count": V(), "ping_size": V(),
             "max_loss": V(), "retries": V(), "settle_time": V(), "output": V(),
             "reconnect_timeout": V(),
@@ -84,6 +152,7 @@ class ControllerApp:
         self.mode_vars = {m: B() for m in MODES}
         self.radio_vars = {r: B() for r in RADIOS}
         self.bw_vars = {bw: B() for bw in BANDWIDTHS}
+        self.phy_vars = {pm: B() for pm in PHY_MODES}
 
     def _load_vars(self, cfg):
         for k, var in self.v.items():
@@ -96,6 +165,8 @@ class ControllerApp:
             var.set(r in cfg["radios"])
         for bw, var in self.bw_vars.items():
             var.set(bw in cfg["bandwidths"])
+        for pm, var in self.phy_vars.items():
+            var.set(pm in cfg["phy_modes"])
 
     def collect_config(self):
         cfg = dict(self.cfg)
@@ -119,6 +190,7 @@ class ControllerApp:
         cfg["modes"] = [m for m in MODES if self.mode_vars[m].get()]
         cfg["radios"] = [r for r in RADIOS if self.radio_vars[r].get()]
         cfg["bandwidths"] = [bw for bw in BANDWIDTHS if self.bw_vars[bw].get()]
+        cfg["phy_modes"] = [pm for pm in PHY_MODES if self.phy_vars[pm].get()]
         errs = validate(cfg)
         if errs:
             raise ValueError("\n".join(errs))
@@ -130,6 +202,14 @@ class ControllerApp:
         style = ttk.Style()
         if "clam" in style.theme_names():
             style.theme_use("clam")
+        # clam uses a fixed ~20px Treeview row height, which clips text on HiDPI displays;
+        # size rows from the actual font line height instead.
+        linespace = tkfont.nametofont("TkDefaultFont").metrics("linespace")
+        style.configure("Treeview", rowheight=linespace + 6)
+        style.configure("Treeview.Heading", padding=(4, 3))
+        self._style_checkbuttons(style, max(12, int(linespace * 0.6)))
+        # Column widths below assume a ~17px line height (9pt at 96 DPI); scale them to the font.
+        self.ui_scale = max(1.0, linespace / 17.0)
         style.configure("Pass.TLabel", foreground="#1b7f2a")
         style.configure("Fail.TLabel", foreground="#b3261e")
 
@@ -175,6 +255,25 @@ class ControllerApp:
         self.status = tk.StringVar(value="ready")
         ttk.Label(outer, textvariable=self.status, anchor="w", relief="sunken").pack(fill="x", pady=(4, 0))
 
+    def _style_checkbuttons(self, style, size):
+        """Replace clam's 'X' indicator with a rounded box + tick mark, sized to the font."""
+        if "Tick.indicator" in style.element_names():
+            return
+        bg = style.lookup("TCheckbutton", "background") or "#dcdad5"
+        img = {name: _checkbox_image(self.root, size, bg, fill, border, tick)
+               for name, (fill, border, tick) in CHECKBOX_STATES.items()}
+        self._checkbox_images = img  # keep references, Tk does not
+        style.element_create(
+            "Tick.indicator", "image", img["off"],
+            ("disabled", "selected", img["on_disabled"]), ("disabled", img["off_disabled"]),
+            ("selected", "pressed", img["on_hover"]), ("selected", "active", img["on_hover"]),
+            ("selected", img["on"]), ("pressed", img["off_hover"]), ("active", img["off_hover"]),
+            width=size + max(6, size // 3), sticky="w")
+        style.layout("TCheckbutton", [("Checkbutton.padding", {"sticky": "nswe", "children": [
+            ("Tick.indicator", {"side": "left", "sticky": ""}),
+            ("Checkbutton.focus", {"side": "left", "sticky": "w",
+                                   "children": [("Checkbutton.label", {"sticky": "nswe"})]})]})])
+
     def _build_server_frame(self, parent):
         f = ttk.LabelFrame(parent, text="Controller server", padding=6)
         for r, (label, key, w) in enumerate((("Listen", "listen", 14), ("Port", "port", 7),
@@ -197,7 +296,7 @@ class ControllerApp:
         tv = ttk.Treeview(f, columns=[c[0] for c in DUT_COLS], show="headings", height=4)
         for key, title, width in DUT_COLS:
             tv.heading(key, text=title)
-            tv.column(key, width=width, anchor="w")
+            tv.column(key, width=self._px(width), anchor="w")
         tv.grid(row=0, column=0, columnspan=6, sticky="nsew")
         f.columnconfigure(5, weight=1)
         self.dut_tv = tv
@@ -231,17 +330,21 @@ class ControllerApp:
         notes = {"HT5": " (2.4G)", "HT10": " (2.4G)", "HT80": " (5G)"}
         for bw in BANDWIDTHS:
             ttk.Checkbutton(col, text=bw + notes.get(bw, ""), variable=self.bw_vars[bw]).pack(anchor="w")
+        ttk.Label(col, text="PHY modes", font=("TkDefaultFont", 9, "bold")).pack(anchor="w", pady=(6, 0))
+        pf = ttk.Frame(col)
+        pf.pack(anchor="w")
+        for i, pm in enumerate(PHY_MODES):
+            ttk.Checkbutton(pf, text=PHY_LABELS[pm], variable=self.phy_vars[pm]).grid(
+                row=i // 2, column=i % 2, sticky="w", padx=(0, 8))
 
         col = ttk.Frame(f)
         col.grid(row=0, column=2, sticky="nw", padx=(0, 16))
         rows = (("2.4G channels", "channels_2g", 18), ("5G channels", "channels_5g", 18),
-                ("htmode family", "phy_mode", None), ("Country", "country", 6),
+                ("Country", "country", 6),
                 ("Encryption", "encryption", None), ("Key", "key", 18), ("Test subnet", "subnet", 14))
         for r, (label, key, w) in enumerate(rows):
             ttk.Label(col, text=label).grid(row=r, column=0, sticky="w")
-            if key == "phy_mode":
-                wdg = ttk.Combobox(col, textvariable=self.v[key], values=PHY_MODES, width=8, state="readonly")
-            elif key == "encryption":
+            if key == "encryption":
                 wdg = ttk.Combobox(col, textvariable=self.v[key], values=ENCRYPTIONS, width=8, state="readonly")
             else:
                 wdg = ttk.Entry(col, textvariable=self.v[key], width=w, show="*" if key == "key" else "")
@@ -293,12 +396,15 @@ class ControllerApp:
         ttk.Label(f, textvariable=self.fail_text, style="Fail.TLabel", width=9).pack(side="left")
         return f
 
+    def _px(self, width):
+        return int(width * self.ui_scale)
+
     def _make_tree(self, nb, cols, title):
         frame = ttk.Frame(nb)
         tv = ttk.Treeview(frame, columns=[c[0] for c in cols], show="headings")
         for key, text, width in cols:
             tv.heading(key, text=text)
-            tv.column(key, width=width, anchor="w", stretch=(key == "reason"))
+            tv.column(key, width=self._px(width), anchor="w", stretch=(key == "reason"))
         ys = ttk.Scrollbar(frame, orient="vertical", command=tv.yview)
         xs = ttk.Scrollbar(frame, orient="horizontal", command=tv.xview)
         tv.configure(yscrollcommand=ys.set, xscrollcommand=xs.set)

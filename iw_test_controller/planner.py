@@ -41,16 +41,16 @@ class TestCase:
 
 def _htmode(band, bw, phy_mode, channel, avail):
     """Return (htmode, chanbw) or None if the width cannot be used on this channel."""
-    fam20 = {"ht": "HT", "vht": "VHT" if band == "5g" else "HT", "he": "HE"}[phy_mode]
+    fam20 = {"ht": "HT", "vht": "VHT" if band == "5g" else "HT", "he": "HE", "eht": "EHT"}[phy_mode]
     if bw in ("HT5", "HT10"):
-        return ("HE20" if phy_mode == "he" else "HT20"), BW_MHZ[bw]
+        return ("HT20" if fam20 == "VHT" else fam20 + "20"), BW_MHZ[bw]
     if bw == "HT20":
         return fam20 + "20", 20
     if bw == "HT40":
         if band == "2g":
             # OpenWrt picks HT40+ below channel 7 and HT40- otherwise for auto modes;
             # with plain HT we choose explicitly so more channels qualify.
-            if phy_mode == "ht":
+            if fam20 == "HT":
                 if channel + 4 in avail and (channel < 7 or channel - 4 not in avail):
                     return "HT40+", 20
                 if channel - 4 in avail:
@@ -67,7 +67,7 @@ def _htmode(band, bw, phy_mode, channel, avail):
             block = [start + 4 * i for i in range(4)]
             if channel in block:
                 if all(c in avail for c in block):
-                    return ("HE80" if phy_mode == "he" else "VHT80"), 20
+                    return ("VHT80" if fam20 == "HT" else fam20 + "80"), 20
                 return None
         return None
     return None
@@ -90,7 +90,7 @@ def _span(band, bw, htmode, channel):
 def build_plan(cfg, dut_a, dut_b, radios_a, radios_b):
     """Return (tests, notes). notes explains everything that was skipped."""
     tests, notes = [], []
-    phy_mode = cfg["phy_mode"]
+    seen = set()   # e.g. ht and vht both map to HT20 on 2.4 GHz - run it once
     user_chans = {"2g": parse_channel_list(cfg["channels_2g"]),
                   "5g": parse_channel_list(cfg["channels_5g"])}
 
@@ -136,24 +136,29 @@ def build_plan(cfg, dut_a, dut_b, radios_a, radios_b):
                     if bw == "HT80" and not (ra["vht"] and rb["vht"]):
                         notes.append("%s: 80 MHz (VHT) not supported by both DUTs" % radio)
                         continue
-                    if phy_mode == "he" and not (ra["he"] and rb["he"]):
-                        notes.append("%s: HE not supported by both DUTs" % radio)
-                        continue
-                    for ch in chans:
-                        hm = _htmode(band, bw, phy_mode, ch, usable)
-                        if hm is None:
-                            notes.append("%s %s ch%d: %s not possible" % (mode, radio, ch, bw))
+                    for phy_mode in cfg["phy_modes"]:
+                        if phy_mode in ("he", "eht") and not (ra.get(phy_mode) and rb.get(phy_mode)):
+                            notes.append("%s %s: %s not supported by both DUTs"
+                                         % (radio, band, phy_mode.upper()))
                             continue
-                        htmode, chanbw = hm
-                        dfs = any(usable.get(c, {}).get("dfs") for c in _span(band, bw, htmode, ch))
-                        if mode == "ap_sta":
-                            pairs = [(dut_a, "ap", dut_b, "sta")]
-                            if cfg["swap_roles"]:
-                                pairs.append((dut_b, "ap", dut_a, "sta"))
-                        else:
-                            pairs = [(dut_a, "mesh", dut_b, "mesh")]
-                        for d1, r1, d2, r2 in pairs:
-                            tests.append(TestCase(len(tests) + 1, mode, radio, band, ch,
-                                                  usable[ch]["freq"], bw, htmode, chanbw, dfs,
-                                                  d1, r1, d2, r2))
+                        for ch in chans:
+                            hm = _htmode(band, bw, phy_mode, ch, usable)
+                            if hm is None:
+                                notes.append("%s %s ch%d: %s not possible" % (mode, radio, ch, bw))
+                                continue
+                            htmode, chanbw = hm
+                            if (mode, radio, ch, bw, htmode) in seen:
+                                continue
+                            seen.add((mode, radio, ch, bw, htmode))
+                            dfs = any(usable.get(c, {}).get("dfs") for c in _span(band, bw, htmode, ch))
+                            if mode == "ap_sta":
+                                pairs = [(dut_a, "ap", dut_b, "sta")]
+                                if cfg["swap_roles"]:
+                                    pairs.append((dut_b, "ap", dut_a, "sta"))
+                            else:
+                                pairs = [(dut_a, "mesh", dut_b, "mesh")]
+                            for d1, r1, d2, r2 in pairs:
+                                tests.append(TestCase(len(tests) + 1, mode, radio, band, ch,
+                                                      usable[ch]["freq"], bw, htmode, chanbw, dfs,
+                                                      d1, r1, d2, r2))
     return tests, notes

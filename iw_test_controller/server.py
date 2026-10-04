@@ -27,6 +27,7 @@ def parse_radio_info(info):
             "ht40": bool(info.get("%s_ht40" % phy)),
             "vht": bool(info.get("%s_vht" % phy)),
             "he": bool(info.get("%s_he" % phy)),
+            "eht": bool(info.get("%s_eht" % phy)),
             "uci": info.get("%s_uci" % phy, ""),
         }
     return radios

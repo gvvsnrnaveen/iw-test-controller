@@ -131,7 +131,10 @@ Matrix rules:
 * DFS channels need `--include-dfs`.
 * HT40 needs a valid secondary channel. On 2.4 GHz that's explicit HT40+ or HT40−; on 5 GHz it
   follows the OpenWrt pairing.
-* HT80 needs the full 80 MHz block. It maps to `VHT80`, or `HE80` with `--phy-mode he`.
+* HT80 needs the full 80 MHz block. It maps to `VHT80` (ht/vht), `HE80` (he) or `EHT80` (eht).
+* `--phy-modes ht,vht,he,eht` runs the matrix once per htmode family, e.g. `HT20`, `VHT20`,
+  `HE20`, `EHT20`. HE and EHT tests need both DUTs to report that capability; duplicate
+  htmodes (vht on 2.4 GHz is plain HT) run only once.
 * `--swap-roles` repeats each AP/STA test with the roles reversed.
 
 ## CSV columns

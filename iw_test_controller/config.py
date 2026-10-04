@@ -8,7 +8,8 @@ MODES = ["ap_sta", "mesh"]
 MODE_LABELS = {"ap_sta": "AP(WDS) + STA(WDS)", "mesh": "802.11s Mesh"}
 RADIOS = ["phy0", "phy1", "phy2"]
 BANDWIDTHS = ["HT5", "HT10", "HT20", "HT40", "HT80"]
-PHY_MODES = ["ht", "vht", "he"]
+PHY_MODES = ["ht", "vht", "he", "eht"]
+PHY_LABELS = {"ht": "HT", "vht": "VHT (5G)", "he": "HE", "eht": "EHT"}
 ENCRYPTIONS = ["none", "psk2", "sae"]
 
 DEFAULTS = {
@@ -31,7 +32,7 @@ DEFAULTS = {
     "include_dfs": False,
     "dfs_wait": 70,                # extra seconds for CAC on DFS channels
     "swap_roles": False,           # also run AP/STA with roles reversed
-    "phy_mode": "ht",              # ht | vht | he  (uci htmode family)
+    "phy_modes": ["ht"],           # uci htmode families to test: ht, vht, he, eht
     # link parameters
     "encryption": "none",
     "key": "",
@@ -61,9 +62,12 @@ def load_config(path):
     cfg = default_config()
     with open(path) as f:
         data = json.load(f)
-    unknown = set(data) - set(DEFAULTS)
+    unknown = set(data) - set(DEFAULTS) - {"phy_mode"}
     if unknown:
         raise ValueError("unknown config keys: %s" % ", ".join(sorted(unknown)))
+    if "phy_mode" in data:          # legacy single-value key
+        data.setdefault("phy_modes", [data["phy_mode"]])
+        del data["phy_mode"]
     cfg.update(data)
     return cfg
 
@@ -101,6 +105,11 @@ def validate(cfg):
         errs.append("select at least one radio")
     if not cfg["bandwidths"]:
         errs.append("select at least one bandwidth")
+    if not cfg["phy_modes"]:
+        errs.append("select at least one PHY mode")
+    bad = [m for m in cfg["phy_modes"] if m not in PHY_MODES]
+    if bad:
+        errs.append("invalid phy_modes: %s (allowed: %s)" % (",".join(bad), ",".join(PHY_MODES)))
     if cfg["encryption"] != "none" and len(cfg["key"]) < 8:
         errs.append("key must be at least 8 characters for %s" % cfg["encryption"])
     for k in ("channels_2g", "channels_5g"):
@@ -141,7 +150,9 @@ def add_cli_args(p):
     g.add_argument("--dfs-wait", type=int, help="extra seconds for DFS CAC (default 70)")
     g.add_argument("--swap-roles", action="store_true", default=None,
                    help="repeat AP/STA tests with DUT roles swapped")
-    g.add_argument("--phy-mode", choices=PHY_MODES, help="htmode family: ht (HT/VHT80), vht, he")
+    g.add_argument("--phy-modes", "--phy-mode", dest="phy_modes",
+                   help="comma list of htmode families: %s (ht uses VHT80 for 80 MHz, vht is 5 GHz only)"
+                   % ",".join(PHY_MODES))
 
     g = p.add_argument_group("link")
     g.add_argument("--encryption", choices=ENCRYPTIONS)
@@ -170,7 +181,7 @@ def add_cli_args(p):
 
 
 def apply_cli(cfg, args):
-    list_opts = {"modes": MODES, "radios": RADIOS, "bandwidths": BANDWIDTHS}
+    list_opts = {"modes": MODES, "radios": RADIOS, "bandwidths": BANDWIDTHS, "phy_modes": PHY_MODES}
     for key in DEFAULTS:
         val = getattr(args, key, None)
         if val is None:

@@ -26,7 +26,9 @@
     "mesh"
   ],
   "output": "results/iw-test-controller_{timestamp}.csv",
-  "phy_mode": "ht",
+  "phy_modes": [
+    "ht"
+  ],
   "ping_count": 10,
   "ping_size": 56,
   "port": 5555,
