@@ -15,6 +15,7 @@ from tkinter.scrolledtext import ScrolledText
 from . import __version__
 from .config import (BANDWIDTHS, ENCRYPTIONS, MODE_LABELS, MODES, PHY_LABELS, PHY_MODES, RADIOS,
                      load_config, output_path, save_config, validate)
+from .manual import MANUAL
 from .planner import build_plan
 from .runner import TestRunner
 from .server import ControllerServer
@@ -231,9 +232,12 @@ class ControllerApp:
         fm.add_command(label="Quit", command=self.on_close)
         menubar.add_cascade(label="File", menu=fm)
         hm = tk.Menu(menubar, tearoff=0)
+        hm.add_command(label="User manual", accelerator="F1", command=self.show_manual)
+        hm.add_separator()
         hm.add_command(label="About", command=self.show_about)
         menubar.add_cascade(label="Help", menu=hm)
         self.root.config(menu=menubar)
+        self.root.bind("<F1>", lambda _e: self.show_manual())
 
         outer = ttk.Frame(self.root, padding=6)
         outer.pack(fill="both", expand=True)
@@ -710,6 +714,77 @@ class ControllerApp:
             subprocess.Popen([opener, d])
         except OSError as e:
             messagebox.showerror("iw-test-controller", str(e))
+
+    def show_manual(self):
+        if getattr(self, "manual_win", None) and self.manual_win.winfo_exists():
+            self.manual_win.deiconify()
+            self.manual_win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self.manual_win = win
+        win.title("iw-test-controller %s - User manual" % __version__)
+        win.geometry("%dx%d" % (min(self._px(1100), self.root.winfo_screenwidth() - 80),
+                                min(self._px(750), self.root.winfo_screenheight() - 120)))
+        pw = ttk.PanedWindow(win, orient="horizontal")
+        pw.pack(fill="both", expand=True, padx=6, pady=6)
+
+        toc = tk.Listbox(pw, activestyle="none", exportselection=False, width=36, relief="flat",
+                         highlightthickness=0)
+        for title, _body in MANUAL:
+            toc.insert("end", title)
+        pw.add(toc, weight=0)
+
+        tf = ttk.Frame(pw)
+        pw.add(tf, weight=1)
+        txt = tk.Text(tf, wrap="word", padx=14, pady=10, relief="flat", cursor="arrow", font="TkDefaultFont")
+        ys = ttk.Scrollbar(tf, orient="vertical", command=txt.yview)
+        xs = ttk.Scrollbar(tf, orient="horizontal", command=txt.xview)
+        txt.configure(yscrollcommand=ys.set, xscrollcommand=xs.set)
+        txt.grid(row=0, column=0, sticky="nsew")
+        ys.grid(row=0, column=1, sticky="ns")
+        xs.grid(row=1, column=0, sticky="ew")
+        tf.rowconfigure(0, weight=1)
+        tf.columnconfigure(0, weight=1)
+
+        base = tkfont.nametofont("TkDefaultFont").actual()
+        fixed = tkfont.nametofont("TkFixedFont").actual()
+        win.fonts = {"h1": tkfont.Font(family=base["family"], size=base["size"] + 5, weight="bold"),
+                     "h2": tkfont.Font(family=base["family"], size=base["size"] + 1, weight="bold"),
+                     "code": tkfont.Font(family=fixed["family"], size=fixed["size"])}
+        txt.tag_configure("h1", font=win.fonts["h1"], foreground="#0b4a85", spacing1=14, spacing3=8)
+        txt.tag_configure("h2", font=win.fonts["h2"], spacing1=10, spacing3=4)
+        txt.tag_configure("p", spacing3=4)
+        txt.tag_configure("bullet", lmargin1=12, lmargin2=28, spacing3=2)
+        txt.tag_configure("code", font=win.fonts["code"], background="#f3f4f6", wrap="none",
+                          lmargin1=12, lmargin2=12)
+
+        for i, (title, body) in enumerate(MANUAL):
+            txt.mark_set("sec%d" % i, "end-1c")
+            txt.mark_gravity("sec%d" % i, "left")
+            txt.insert("end", title + "\n", "h1")
+            for line in body.rstrip("\n").split("\n"):
+                if line.startswith("## "):
+                    txt.insert("end", line[3:] + "\n", "h2")
+                elif line.startswith("* "):
+                    txt.insert("end", "\u2022  " + line[2:] + "\n", "bullet")
+                elif line.startswith("    "):
+                    txt.insert("end", line[4:] + "\n", "code")
+                else:
+                    txt.insert("end", line + "\n", "p")
+        txt.configure(state="disabled")
+
+        def goto(_e=None):
+            sel = toc.curselection()
+            if sel:
+                txt.yview("sec%d" % sel[0])   # obsolete "yview index" form: puts the mark at the top
+        toc.bind("<<ListboxSelect>>", goto)
+        toc.selection_set(0)
+
+        bf = ttk.Frame(win)
+        bf.pack(fill="x", padx=6, pady=(0, 6))
+        ttk.Button(bf, text="Close", command=win.destroy).pack(side="right")
+        win.bind("<Escape>", lambda _e: win.destroy())
+        txt.focus_set()
 
     def show_about(self):
         win = tk.Toplevel(self.root)

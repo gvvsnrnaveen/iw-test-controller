@@ -31,6 +31,7 @@ or use auto-start.
 | `iw_test_controller/runner.py` | runs the tests one by one, judges PASS/FAIL, writes the CSV |
 | `iw_test_controller/config.py` | configuration defaults and JSON load/save |
 | `iw_test_controller/gui.py` | Tkinter GUI |
+| `iw_test_controller/manual.py` | user manual shown under *Help → User manual* (F1) |
 | `example_config.json` | sample config for `-c` |
 
 ## Requirements
@@ -93,7 +94,8 @@ The server starts listening at launch, and connected DUTs appear in the table. C
 DUT B, then tick modes, radios and bandwidths. Use **Preview plan** to see the matrix and an
 estimated duration, then **Start tests**. Pause/Resume and Stop work between tests. Results
 appear live, coloured green or red. Double-click a row to see every field. *File → Save config*
-writes a JSON file that the CLI can reuse.
+writes a JSON file that the CLI can reuse. *Help → User manual* (or F1) opens the full
+manual for the GUI, CLI, test flow, CSV columns and troubleshooting.
 
 Headless CLI:
 ```sh
