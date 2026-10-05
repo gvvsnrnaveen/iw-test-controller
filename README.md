@@ -113,8 +113,8 @@ Run `./iw_test_controller.py --help` for every option. Each option in the GUI ha
 1. **Prepare** (once per DUT): the agent backs up `/etc/config/{wireless,network,firewall}` to
    `/tmp/iw_test_agent_backup`. It creates bridge `br-fpt` with `<subnet>.1` (DUT A) or
    `<subnet>.2` (DUT B), plus an ACCEPT firewall zone, and disables the existing wifi-ifaces.
-2. **Apply**: enable only the radio under test. Set `channel`, `htmode`, and `chanbw` for
-   HT5/HT10. Create `wireless.fpt_iface` (ifname `fpt0`, `wds=1` for AP/STA, `mesh_id` for mesh),
+2. **Apply**: enable only the radio under test. Set `channel` and `htmode`; HT5/HT10 also
+   set `hwmode=11g`. Create `wireless.fpt_iface` (ifname `fpt0`, `wds=1` for AP/STA, `mesh_id` for mesh),
    then run `wifi up`.
 3. **Link**
    * AP/STA: the AP must come up (DFS channels get extra CAC time), then the STA must show
@@ -148,7 +148,7 @@ rev_rtt_avg_ms, duration_s`
 
 ## Notes and limitations
 
-* **HT5 / HT10 on ath11k**: these are configured through OpenWrt's `chanbw` option.
+* **HT5 / HT10 on ath11k**: these are configured as `htmode=HT5`/`HT10` with `hwmode=11g`.
   Upstream ath11k/mac80211 does not implement 5/10 MHz for AP/STA/mesh. Unless your
   firmware/driver build supports it, these tests will FAIL with
   `width 20 MHz, expected 5`, which is a real finding, not a tool error. If your vendor tree has

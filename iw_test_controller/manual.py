@@ -219,8 +219,8 @@ to the CSV; its attempt column shows which attempt it was.
 1. Prepare (once per DUT per run): the agent backs up /etc/config/wireless, network and firewall \
 to /tmp/iw_test_agent_backup, creates bridge br-fpt with the test IP (<subnet>.1 or .2) and an \
 ACCEPT firewall zone, and disables the existing wifi-ifaces.
-2. Apply: only the radio under test is enabled. channel, htmode, country and (for HT5/HT10) \
-chanbw are set. Interface wireless.fpt_iface (ifname fpt0) is created: wds=1 for AP/STA, a \
+2. Apply: only the radio under test is enabled. channel, htmode and country are set; HT5/HT10 \
+use htmode=HT5/HT10 with hwmode=11g. Interface wireless.fpt_iface (ifname fpt0) is created: wds=1 for AP/STA, a \
 mesh_id for mesh. Then wifi up.
 3. Link:
 * AP/STA: the AP must come up first (DFS channels get the extra CAC wait), then the STA must \
@@ -253,7 +253,7 @@ the standard pairing is used (36+40, 44+48, ...).
 
 ## htmode per PHY mode
     Bandwidth   HT            VHT (5G)   HE      EHT
-    HT5/HT10    HT20          HT20       HE20    EHT20     (plus chanbw = 5 or 10)
+    HT5/HT10    HT5/HT10      HT5/HT10   HT5/HT10 HT5/HT10 (plus hwmode = 11g)
     HT20        HT20          VHT20      HE20    EHT20
     HT40        HT40+/-       VHT40      HE40    EHT40
     HT80        VHT80         VHT80      HE80    EHT80

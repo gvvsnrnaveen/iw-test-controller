@@ -43,7 +43,8 @@ def _htmode(band, bw, phy_mode, channel, avail):
     """Return (htmode, chanbw) or None if the width cannot be used on this channel."""
     fam20 = {"ht": "HT", "vht": "VHT" if band == "5g" else "HT", "he": "HE", "eht": "EHT"}[phy_mode]
     if bw in ("HT5", "HT10"):
-        return ("HT20" if fam20 == "VHT" else fam20 + "20"), BW_MHZ[bw]
+        # narrowband is plain 11g: htmode=HT5/HT10 + hwmode=11g, whatever the family
+        return bw, BW_MHZ[bw]
     if bw == "HT20":
         return fam20 + "20", 20
     if bw == "HT40":

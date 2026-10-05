@@ -205,9 +205,12 @@ class TestRunner(threading.Thread):
         return row
 
     def _apply_params(self, tc):
-        return dict(phy=tc.radio, channel=tc.channel, htmode=tc.htmode, chanbw=tc.chanbw,
-                    encryption=self.cfg["encryption"], key=self.cfg["key"],
-                    country=self.cfg["country"])
+        p = dict(phy=tc.radio, channel=tc.channel, htmode=tc.htmode, chanbw=tc.chanbw,
+                 encryption=self.cfg["encryption"], key=self.cfg["key"],
+                 country=self.cfg["country"])
+        if tc.bandwidth in ("HT5", "HT10"):
+            p["hwmode"] = "11g"
+        return p
 
     def _link_timeout(self, tc):
         return self.cfg["assoc_timeout"] + (self.cfg["dfs_wait"] if tc.dfs else 0)
