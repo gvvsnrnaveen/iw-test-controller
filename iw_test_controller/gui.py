@@ -33,6 +33,10 @@ ABOUT_LINKS = [("LinkedIn", "https://www.linkedin.com/in/naveen-kumar-gutti/"),
                ("GitHub", "https://github.com/gvvsnrnaveen"),
                ("iw-test-controller", "https://github.com/gvvsnrnaveen/iw-test-controller"),
                ("iw-test-agent", "https://github.com/gvvsnrnaveen/iw-test-agent")]
+# style: (background, hover, pressed/border, foreground)
+BUTTON_STYLES = {"TButton": ("#f7f8fa", "#eceff3", "#c9ced6", "#2b2b2b"),
+                 "Start.TButton": ("#dcecfb", "#c8e0f8", "#8fbbe8", "#0b4a85"),
+                 "Stop.TButton": ("#fbe0de", "#f7cbc8", "#e39a94", "#8c1d18")}
 AVATAR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "github_avatar.png")
 DUT_COLS = [("name", "Name", 120), ("ip", "IP", 110), ("model", "Model", 160),
             ("radios", "Radios", 200), ("version", "Agent", 60), ("busy", "Busy", 70)]
@@ -212,6 +216,10 @@ class ControllerApp:
         self.ui_scale = max(1.0, linespace / 17.0)
         style.configure("Pass.TLabel", foreground="#1b7f2a")
         style.configure("Fail.TLabel", foreground="#b3261e")
+        self._style_buttons(style)
+        base = tkfont.nametofont("TkDefaultFont").actual()
+        self.title_font = tkfont.Font(family=base["family"], size=base["size"] + 3, weight="bold")
+        style.configure("TLabelframe.Label", font=self.title_font)
 
         menubar = tk.Menu(self.root)
         fm = tk.Menu(menubar, tearoff=0)
@@ -232,7 +240,8 @@ class ControllerApp:
 
         top = ttk.Frame(outer)
         top.pack(fill="x")
-        self._build_server_frame(top).pack(side="left", fill="y", padx=(0, 6))
+        self._build_logo(top).pack(side="left", anchor="n", padx=(0, 8), pady=(6, 0))
+        self._build_server_frame(top).pack(side="left", fill="y", padx=(0, self._px(32)))
         self._build_dut_frame(top).pack(side="left", fill="both", expand=True)
 
         self._build_test_frame(outer).pack(fill="x", pady=6)
@@ -255,6 +264,18 @@ class ControllerApp:
         self.status = tk.StringVar(value="ready")
         ttk.Label(outer, textvariable=self.status, anchor="w", relief="sunken").pack(fill="x", pady=(4, 0))
 
+    def _style_buttons(self, style):
+        """Light, flat buttons: neutral by default, light blue for start, light red for stop."""
+        for name, (bg, hover, press, fg) in BUTTON_STYLES.items():
+            style.configure(name, background=bg, foreground=fg, bordercolor=press,
+                            lightcolor=bg, darkcolor=bg, focuscolor=fg, padding=(10, 4))
+            style.map(name,
+                      background=[("disabled", "#f2f2f2"), ("pressed", press), ("active", hover)],
+                      lightcolor=[("disabled", "#f2f2f2"), ("pressed", press), ("active", hover)],
+                      darkcolor=[("disabled", "#f2f2f2"), ("pressed", press), ("active", hover)],
+                      bordercolor=[("disabled", "#d8d8d8")],
+                      foreground=[("disabled", "#a0a0a0")])
+
     def _style_checkbuttons(self, style, size):
         """Replace clam's 'X' indicator with a rounded box + tick mark, sized to the font."""
         if "Tick.indicator" in style.element_names():
@@ -274,6 +295,17 @@ class ControllerApp:
             ("Checkbutton.focus", {"side": "left", "sticky": "w",
                                    "children": [("Checkbutton.label", {"sticky": "nswe"})]})]})])
 
+    def _build_logo(self, parent):
+        f = ttk.Frame(parent)
+        try:
+            # 160px source; show at ~80px, scaled up on HiDPI displays.
+            factor = max(1, round(2 / self.ui_scale))
+            self.logo = tk.PhotoImage(file=AVATAR_PATH).subsample(factor)
+            ttk.Label(f, image=self.logo).pack()
+        except tk.TclError:
+            pass
+        return f
+
     def _build_server_frame(self, parent):
         f = ttk.LabelFrame(parent, text="Controller server", padding=6)
         for r, (label, key, w) in enumerate((("Listen", "listen", 14), ("Port", "port", 7),
@@ -283,9 +315,10 @@ class ControllerApp:
                       show="*" if key == "token" else "").grid(row=r, column=1, sticky="w", pady=1)
         bf = ttk.Frame(f)
         bf.grid(row=3, column=0, columnspan=2, pady=(6, 0), sticky="w")
-        self.btn_srv_start = ttk.Button(bf, text="Start server", command=self.start_server)
+        self.btn_srv_start = ttk.Button(bf, text="Start server", style="Start.TButton",
+                                        command=self.start_server)
         self.btn_srv_start.pack(side="left")
-        self.btn_srv_stop = ttk.Button(bf, text="Stop", command=self.stop_server)
+        self.btn_srv_stop = ttk.Button(bf, text="Stop", style="Stop.TButton", command=self.stop_server)
         self.btn_srv_stop.pack(side="left", padx=4)
         self.srv_state = tk.StringVar(value="stopped")
         ttk.Label(f, textvariable=self.srv_state).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
@@ -312,6 +345,8 @@ class ControllerApp:
 
     def _build_test_frame(self, parent):
         f = ttk.LabelFrame(parent, text="Test selection", padding=6)
+        for c in range(5):
+            f.columnconfigure(c, weight=1)
 
         col = ttk.Frame(f)
         col.grid(row=0, column=0, sticky="nw", padx=(0, 16))
@@ -352,10 +387,10 @@ class ControllerApp:
 
         col = ttk.Frame(f)
         col.grid(row=0, column=3, sticky="nw", padx=(0, 16))
-        rows = (("Assoc timeout s", "assoc_timeout"), ("DFS CAC wait s", "dfs_wait"),
+        rows = (("Assoc timeout (sec)", "assoc_timeout"), ("DFS CAC wait (sec)", "dfs_wait"),
                 ("Ping count", "ping_count"), ("Ping size", "ping_size"),
-                ("Max loss %", "max_loss"), ("Retries", "retries"), ("Settle s", "settle_time"),
-                ("Reconnect wait s", "reconnect_timeout"))
+                ("Max loss %", "max_loss"), ("Retries", "retries"), ("Settle (sec)", "settle_time"),
+                ("Reconnect wait (sec)", "reconnect_timeout"))
         for r, (label, key) in enumerate(rows):
             ttk.Label(col, text=label).grid(row=r, column=0, sticky="w")
             ttk.Entry(col, textvariable=self.v[key], width=7).grid(row=r, column=1, sticky="w", pady=1)
@@ -380,11 +415,13 @@ class ControllerApp:
         f = ttk.Frame(parent)
         self.btn_preview = ttk.Button(f, text="Preview plan", command=self.preview_plan)
         self.btn_preview.pack(side="left")
-        self.btn_start = ttk.Button(f, text="Start tests", command=self.start_tests)
+        self.btn_start = ttk.Button(f, text="Start tests", style="Start.TButton",
+                                    command=self.start_tests)
         self.btn_start.pack(side="left", padx=4)
         self.btn_pause = ttk.Button(f, text="Pause", command=self.toggle_pause, state="disabled")
         self.btn_pause.pack(side="left")
-        self.btn_stop = ttk.Button(f, text="Stop", command=self.stop_tests, state="disabled")
+        self.btn_stop = ttk.Button(f, text="Stop", style="Stop.TButton", command=self.stop_tests,
+                                   state="disabled")
         self.btn_stop.pack(side="left", padx=4)
         self.progress = ttk.Progressbar(f, mode="determinate", length=300)
         self.progress.pack(side="left", padx=12, fill="x", expand=True)
